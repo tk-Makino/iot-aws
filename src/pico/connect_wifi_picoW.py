@@ -1,28 +1,37 @@
-import machine
+from machine import I2C, Pin
 import time
 import network
 from umqtt.simple import MQTTClient
 
 # --- 設定項目 ---
-SSID = "あなたのWiFi名"
-PASSWORD = "あなたのパスワード"
-MQTT_BROKER = "192.168.x.x"  # ラズパイのIPアドレス
+SSID = "ZXXX"
+PASSWORD = "1XXXXX"
+MQTT_BROKER = "192.168.XXXXX"  # ラズパイのIPアドレス
 CLIENT_ID = "PicoW_Sensor"
 TOPIC = b"sensor/temperature"
 
 # --- ADT7410 I2C設定 ---
-# I2C0 (SDA: GP0, SCL: GP1) を想定
-i2c = machine.I2C(0, sda=machine.Pin(0), scl=machine.Pin(1), freq=400000)
-ADT7410_ADDR = 0x48
+I2C_SDA = 16
+I2C_SCL = 17
+I2C_CH = 0
+I2C_ADDR = 0x48  # ADT7410のI2Cアドレス
+
+i2c = I2C(I2C_CH, scl=Pin(I2C_SCL), sda=Pin(I2C_SDA), freq=100000)
+i2c.scan()
+
+sensor = i2c.writeto_mem(I2C_ADDR, 0x03, bytearray([0x80]))  # 16bitモード設定
 
 def get_temperature():
-    # ADT7410から2バイト読み取り
-    data = i2c.readfrom_mem(ADT7410_ADDR, 0x00, 2)
-    # 13bit/16bitモードに合わせて計算 (13bitの場合)
-    temp_raw = (data[0] << 8 | data[1]) >> 3
-    if temp_raw & 0x1000: # 負の値の処理
-        temp_raw -= 8192
-    return temp_raw * 0.0625
+    raw = i2c.readfrom_mem(I2C_ADDR, 0x00, 2)
+    msb = raw[0]
+    lsb = raw[1]
+    temparature = (msb << 8) | lsb
+
+    if (temparature >=32768):
+        temparature -= 65536
+
+    temparature = temparature/128.0  # 16bitモードの場合
+    return temparature
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
